@@ -1,0 +1,42 @@
+import { useCallback, useContext, useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { BarChart, Bar, LineChart, Line, CartesianGrid, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
+import { ArrowUpRight, Plus, RefreshCw, ClipboardCheck, CheckCircle2, TrendingUp, Trophy, Sparkles, Target } from 'lucide-react';
+import { AuthContext } from '../context/AuthContext';
+import * as dashboardService from '../services/dashboardService';
+import * as interviewService from '../services/interviewService';
+import { Card, PageHeader, SectionHeader, Button, ButtonLink, StatCard, EmptyState, ErrorState, LoadingState, SessionList, Chips } from '../components/ui';
+
+function PerformanceChart({ title, description, data, line = false }) {
+  return <Card className="chart-card"><SectionHeader title={title} description={description} />{data.length ? <div className="chart" role="img" aria-label={`${title}: ${data.map(d => `${d.name} ${d.score} out of 10`).join(', ')}`}><ResponsiveContainer width="100%" height="100%">{line ? <LineChart data={data} margin={{top:10,right:12,bottom:0,left:-24}}><CartesianGrid stroke="var(--line)" vertical={false} strokeDasharray="3 3" /><XAxis dataKey="name" tick={{fontSize:10,fill:'var(--muted)'}} axisLine={false} tickLine={false} /><YAxis domain={[0,10]} ticks={[0,5,10]} tick={{fontSize:10,fill:'var(--muted)'}} axisLine={false} tickLine={false} /><Tooltip formatter={v => [`${v} / 10`,'Score']} contentStyle={{borderRadius:8,border:'1px solid var(--line)',fontSize:12}} /><Line dataKey="score" stroke="var(--primary)" strokeWidth={2.5} dot={{r:4,fill:'var(--primary)',stroke:'#fff',strokeWidth:2}} isAnimationActive={false} /></LineChart> : <BarChart data={data} layout="vertical" margin={{top:0,right:22,bottom:0,left:0}}><CartesianGrid stroke="var(--line)" horizontal={false} strokeDasharray="3 3" /><XAxis type="number" domain={[0,10]} ticks={[0,5,10]} tick={{fontSize:10,fill:'var(--muted)'}} axisLine={false} tickLine={false} /><YAxis type="category" dataKey="name" width={90} tick={{fontSize:10,fill:'var(--muted)'}} axisLine={false} tickLine={false} /><Tooltip formatter={v => [`${v} / 10`,'Average']} contentStyle={{borderRadius:8,border:'1px solid var(--line)',fontSize:12}} /><Bar dataKey="score" fill="var(--primary)" radius={[0,4,4,0]} barSize={14} isAnimationActive={false} /></BarChart>}</ResponsiveContainer></div> : <EmptyState title="Your progress starts here" description="Complete an interview to see your performance." />}</Card>;
+}
+export default function Dashboard() {
+  const { user } = useContext(AuthContext);
+  const [stats,setStats] = useState(null), [insights,setInsights] = useState(null), [sessions,setSessions] = useState([]);
+  const [loading,setLoading] = useState(true), [error,setError] = useState(''), [coachError,setCoachError] = useState('');
+  const loadDashboard = useCallback(async () => {
+    setLoading(true); setError(''); setCoachError('');
+    try {
+      const [data,history] = await Promise.all([dashboardService.getStats(),interviewService.getSessions()]);
+      setStats(data); setSessions(history);
+      if (data.overview.totalInterviews > 0) {
+        try { setInsights(await dashboardService.getInsights()); } catch { setCoachError('Your coach is unavailable right now. Your interview statistics are still available.'); }
+      } else setInsights(null);
+    } catch { setError('We couldn’t load your dashboard. Please try again.'); } finally { setLoading(false); }
+  },[]);
+  useEffect(() => { loadDashboard(); },[loadDashboard]);
+  const greeting = new Date().getHours() < 12 ? 'Good morning' : new Date().getHours() < 18 ? 'Good afternoon' : 'Good evening';
+  const practiceState = topic => ({interviewMode:'Focused Practice',focusTopic:topic});
+  const topics = (names, strong = false) => names?.length ? names.map(topic => { const score = stats.topicAverages?.find(t => t.topic === topic)?.average; return <div key={topic} className={`topic-row ${strong?'positive':''}`}><div><strong>{topic}</strong><div className="topic-score">{score ?? '—'} / 10 average</div><div className="score-track"><span style={{width:`${(score || 0)*10}%`}} /></div></div>{strong ? <CheckCircle2 size={18} color="var(--success)" aria-label="Strong topic" /> : <ButtonLink variant="outline" to="/interview/setup" state={practiceState(topic)}>Practice this topic<ArrowUpRight size={14} /></ButtonLink>}</div>; }) : <p className="muted text-sm">Topic insights will appear after your first completed interview.</p>;
+  return <><PageHeader eyebrow="YOUR PREPARATION, AT A GLANCE" title={`${greeting}, ${user?.name?.split(' ')[0] || 'there'}`} description="Small steps today. More confident answers tomorrow." action={<><Button variant="outline" onClick={loadDashboard} disabled={loading} aria-label="Refresh dashboard"><RefreshCw size={16}/></Button><ButtonLink to="/interview/setup"><Plus size={17}/>Start Interview</ButtonLink></>} />
+    {loading ? <LoadingState label="Loading your preparation overview…" /> : error ? <ErrorState message={error} retry={loadDashboard} /> : stats && <div className="stack">
+      <div className="stat-grid"><StatCard icon={ClipboardCheck} label="Total interviews" value={sessions.length} detail="Across all practice sessions" /><StatCard icon={CheckCircle2} label="Completed" value={stats.overview.totalInterviews} detail={`${stats.overview.questionsAnswered} questions answered`} /><StatCard icon={TrendingUp} label="Average score" value={`${stats.overview.averageScore} / 10`} detail="Across completed interviews" /><StatCard icon={Trophy} label="Best score" value={`${stats.overview.bestScore} / 10`} detail="Your personal best" /></div>
+      {!stats.overview.totalInterviews && <Card><EmptyState title="Your next chapter starts with practice" description="You haven't completed an interview yet. Start a session to discover your strengths and build a focused preparation plan." action={<ButtonLink to="/interview/setup">Start your first interview<ArrowUpRight size={16}/></ButtonLink>} /></Card>}
+      {stats.overview.totalInterviews > 0 && <div className="grid-three"><PerformanceChart title="Score trend" description="Your last five completed interviews" data={(stats.recentScores || []).map((score,i)=>({name:`#${i+1}`,score}))} line /><PerformanceChart title="By interview type" description="Average score out of 10" data={Object.entries(stats.interviewTypePerformance || {}).map(([name,score])=>({name,score}))} /><PerformanceChart title="By difficulty" description="Find your next challenge" data={Object.entries(stats.difficultyPerformance || {}).map(([name,score])=>({name,score}))} /></div>}
+      <div className="grid-two"><Card><SectionHeader title="Where to focus next" description="Your lowest-scoring topics" action={<Target size={19} color="var(--warning)" />} />{topics(stats.weakTopics)}</Card><Card><SectionHeader title="Your strongest topics" description="Keep building on what you know" action={<Trophy size={19} color="var(--success)" />} />{topics(stats.strongTopics,true)}</Card></div>
+      <Card className="coach-card"><SectionHeader title={<span className="coach-heading"><span className="icon-tile"><Sparkles size={21}/></span>AI Preparation Coach</span>} description="A focused next step for your preparation" />{coachError ? <ErrorState message={coachError} retry={loadDashboard}/> : insights ? <div className="grid-two"><div className="stack"><p className="coach-summary">{insights.summary}</p><div><h3 className="mb-3">Recommended focus areas</h3><Chips items={insights.focusAreas} tone="primary" /></div></div><div className="next-step"><h3>{insights.recommendedNextStep}</h3><p className="muted text-sm mb-4">{insights.reasoning}</p><ButtonLink to="/interview/setup" state={insights.focusAreas?.[0] ? practiceState(insights.focusAreas[0]) : undefined}>{insights.focusAreas?.[0] ? 'Practice recommended focus' : 'Start Interview'}<ArrowUpRight size={15}/></ButtonLink></div></div> : <p className="muted">Complete an interview to receive a preparation recommendation based on your performance.</p>}</Card>
+      <Card><SectionHeader title="Recent interviews" description="Pick up where you left off, or revisit your feedback." action={<Link className="text-link" to="/interviews">View all<ArrowUpRight size={14}/></Link>} />{sessions.length ? <SessionList sessions={sessions.slice(0,5)} compact /> : <EmptyState title="No interviews yet" description="Your interview history will appear here." />}</Card>
+    </div>}
+  </>;
+}
+

@@ -1,0 +1,17 @@
+{
+  "name": "interview-iq",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "apps/*"
+  ],
+  "scripts": {
+    "dev:api": "npm run dev --workspace=apps/api",
+    "dev:web": "npm run dev --workspace=apps/web",
+    "dev": "concurrently \"npm run dev:api\" \"npm run dev:web\"",
+    "install:all": "npm install && npm install --workspace=apps/api && npm install --workspace=apps/web"
+  },
+  "devDependencies": {
+    "concurrently": "^10.0.5"
+  }
+}
