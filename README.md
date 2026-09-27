@@ -22,11 +22,6 @@ A full-stack MERN interview preparation platform that uses Google Gemini AI to g
 - **Provider-Agnostic AI Layer** — Swap between Gemini and Mock providers via environment variable (no code changes)
 - **Production Hardening** — Helmet, CORS allowlist, rate limiting (general, auth, AI), AI daily usage cap, JWT secret validation
 
-## Screenshots
-
-![InterviewIQ dashboard on desktop](docs/screenshots/dashboard-desktop.png)
-
-[View the mobile dashboard](docs/screenshots/dashboard-mobile.png)
 
 ## Architecture
 
